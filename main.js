@@ -169,10 +169,19 @@ function buildPanel() {
 const panelGroup = new THREE.Group();
 panelGroup.position.set(0, -0.28, -0.85); // un poco abajo y adelante: se ve con solo bajar la mirada, no tapa el edificio
 camera.add(panelGroup);
-const panelButtons = []; // {mesh, label, rgb, layerIdx}
-const BTN_W = 0.16,
-  BTN_H = 0.052,
+const panelButtons = []; // {mesh, label, rgb, layerIdx, canvasW}
+const BTN_H = 0.052,
   BTN_GAP = 0.012;
+const BTN_FONT = "600 38px system-ui, sans-serif";
+const BTN_CANVAS_H = 118;
+const PX_PER_M = 360 / 0.16; // misma proporcion que el boton original de 0.16 m / 360 px, para que la altura no cambie
+
+// 2026-11-11: "seguridad y control no cabe en la pastilla, sale seguridad y se corta control" -- el ancho
+// del boton era fijo (BTN_W) para todas las etiquetas; una mas larga que "Arquitectura"/"Eléctrico" se
+// recortaba. Ahora se MIDE el texto (measureCtx, un canvas 2D aparte solo para medir, nunca se dibuja) y el
+// ancho del boton (canvas Y malla 3D) se ajusta a cada etiqueta en vez de ser el mismo para todos.
+const measureCtx = document.createElement("canvas").getContext("2d");
+measureCtx.font = BTN_FONT;
 
 function roundRectPath(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -184,9 +193,14 @@ function roundRectPath(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-function makeButtonTexture(label, rgb, active) {
-  const w = 360,
-    h = 118;
+function canvasWidthFor(label) {
+  const textW = measureCtx.measureText(label).width;
+  return Math.max(300, 74 + textW + 28); // 74 = hueco del punto de color, 28 = margen derecho
+}
+
+function makeButtonTexture(label, rgb, active, canvasW) {
+  const w = canvasW,
+    h = BTN_CANVAS_H;
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
@@ -207,7 +221,7 @@ function makeButtonTexture(label, rgb, active) {
   ctx.shadowBlur = active ? 18 : 6;
   ctx.fill();
   ctx.shadowBlur = 0;
-  ctx.font = "600 38px system-ui, sans-serif";
+  ctx.font = BTN_FONT;
   ctx.fillStyle = active ? "#ffffff" : "rgba(255,255,255,.8)";
   ctx.textBaseline = "middle";
   ctx.fillText(label, 74, h / 2 + 2);
@@ -219,15 +233,24 @@ function build3DPanel() {
   Object.keys(techLayers)
     .sort((a, b) => a - b)
     .forEach((i) => items.push({ label: techLayers[i].userData.label, rgb: LAYER_COLORS[i] || [136, 136, 136], layerIdx: Number(i) }));
-  const totalW = items.length * BTN_W + (items.length - 1) * BTN_GAP;
+  items.forEach((it) => (it.canvasW = canvasWidthFor(it.label)));
+  const meshWidths = items.map((it) => it.canvasW / PX_PER_M);
+  const totalW = meshWidths.reduce((a, w) => a + w, 0) + (items.length - 1) * BTN_GAP;
+  let x = -totalW / 2;
   items.forEach((it, k) => {
+    const meshW = meshWidths[k];
     const mesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(BTN_W, BTN_H),
-      new THREE.MeshBasicMaterial({ map: makeButtonTexture(it.label, it.rgb, it.layerIdx === -1), transparent: true, depthTest: false })
+      new THREE.PlaneGeometry(meshW, BTN_H),
+      new THREE.MeshBasicMaterial({
+        map: makeButtonTexture(it.label, it.rgb, it.layerIdx === -1, it.canvasW),
+        transparent: true,
+        depthTest: false,
+      })
     );
-    mesh.position.x = -totalW / 2 + BTN_W / 2 + k * (BTN_W + BTN_GAP);
+    mesh.position.x = x + meshW / 2;
+    x += meshW + BTN_GAP;
     panelGroup.add(mesh);
-    panelButtons.push({ mesh, label: it.label, rgb: it.rgb, layerIdx: it.layerIdx });
+    panelButtons.push({ mesh, label: it.label, rgb: it.rgb, layerIdx: it.layerIdx, canvasW: it.canvasW });
   });
 }
 
@@ -235,7 +258,7 @@ function refreshPanelVisual() {
   const active = activeLayer === null ? -1 : activeLayer;
   panelButtons.forEach((p) => {
     p.mesh.material.map.dispose();
-    p.mesh.material.map = makeButtonTexture(p.label, p.rgb, p.layerIdx === active);
+    p.mesh.material.map = makeButtonTexture(p.label, p.rgb, p.layerIdx === active, p.canvasW);
     p.mesh.material.needsUpdate = true;
   });
 }
@@ -249,8 +272,15 @@ function raycastPanel(index) {
   return panelButtons.find((p) => p.mesh === hit.object).layerIdx;
 }
 
+// 2026-11-11: "no hay forma que se corra automaticamente desde github al commitear?" -- rgd.glb (geometria
+// confidencial) nunca puede estar en git, asi que un deploy disparado por git (push) nunca lo tendria si se
+// serviera como archivo local junto a index.html. Se sube aparte a Vercel Blob (fuera de git, token propio
+// en .env.local -- ver README) y se carga por URL fija: ahora index.html/main.js SI pueden vivir 100% en
+// git con deploy automatico en cada push, sin que eso rompa el modelo.
+const GLB_URL = "https://igpszmz4fyx8ifwg.public.blob.vercel-storage.com/rgd.glb";
+
 new GLTFLoader().load(
-  "rgd.glb",
+  GLB_URL,
   (gltf) => {
     root.add(gltf.scene);
     // 2026-11-11: "se ve todo re oscuro... no deberia tener luces, todo deberia verse alumbrado" -- el

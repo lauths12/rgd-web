@@ -3,3 +3,4 @@
 # y se sube a Vercel con el CLI (incluye archivos locales aunque no esten en git).
 rgd.glb
 .vercel
+.env*

@@ -33,7 +33,7 @@ from pxr import Usd, UsdGeom, UsdShade
 
 SCENE = "/srv/isaac-shared/RGD/RGD_scene.usda"
 OUT = os.path.join(HERE, "rgd.glb")
-EXCLUDED_TECH_INDEX = 1  # Control de Iluminacion (ver nota junto a su uso en main(), mas abajo)
+EXCLUDED_TECH_INDICES = {1, 2}  # 1=Control de Iluminacion, 2=Agente Limpio (ver nota junto a su uso en main())
 
 
 def shader_of(material_prim):
@@ -221,13 +221,13 @@ def main():
         b.add_node(name, prims, visible=False)  # fantasma: arranca oculto, el JS lo muestra al arrastrar
         print(f"  fantasma {name}: {len(prims)} sub-mallas")
     for idx, label, prim in tech:
-        if idx == EXCLUDED_TECH_INDEX:
-            # 2026-11-11: "quita la capa de luces que son solo como puntos amarillos" -- Control de
-            # Iluminacion (indice 1) son los puntos/marcadores de los artefactos de luz, no geometria real
-            # reconocible a esta escala: se ve como puntos sueltos, no aporta nada visualmente. Se excluye del
-            # export (ni entra al .glb ni al panel) en vez de solo ocultarla -- no hay ningun uso razonable
-            # para ella en esta version.
-            print(f"  capa tecnica {label} (Tech_{idx}): excluida a pedido del usuario (solo puntos sueltos)")
+        if idx in EXCLUDED_TECH_INDICES:
+            # 2026-11-11: "quita la capa de luces que son solo como puntos amarillos" (Control de Iluminacion,
+            # indice 1: puntos/marcadores de artefactos de luz, no geometria real reconocible a esta escala) +
+            # "quita el de agente limpio" (indice 2, a pedido del usuario, sin razon especifica dada -- se
+            # excluye igual que la de arriba). Se excluyen del export (ni entran al .glb ni al panel) en vez
+            # de solo ocultarlas -- no hay uso razonable para ellas en esta version.
+            print(f"  capa tecnica {label} (Tech_{idx}): excluida a pedido del usuario")
             continue
         prims = mesh_primitives(prim)
         n_tris_total += sum(len(t) for _, t, _ in prims)
