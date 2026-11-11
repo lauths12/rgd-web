@@ -13,14 +13,16 @@ este visor, para que se pueda editar/desplegar sin tocar ni depender de todo lo 
   rayo del control a un piso y apriete el gatillo para separarlo; arrástrelo y suéltelo cerca de su fantasma
   gris para que encaje.
 - **Los dos gatillos a la vez**, en cualquier parte: mueve, gira (eje vertical) y agranda/achica el edificio
-  ENTERO.
-- **Botón de agarre (grip)** de cualquier control: trae el edificio de nuevo frente a usted.
-- **Panel de capas** (cuelga debajo de la vista, se ve con solo bajar la mirada): Arquitectura / Seguridad y
-  Control / Eléctrico, con la arquitectura atenuándose en blanco (con líneas de borde, para que se note la
-  forma) al elegir una capa técnica. Es geometría 3D de verdad (planos con textura de canvas), no HTML: el
-  `dom-overlay` del navegador de la Quest no traducía el rayo del control en clicks sobre botones HTML.
-  (Control de Iluminación y Agente Limpio se excluyeron del export: no aportaban nada visible o no se
-  necesitaban para esta versión.)
+  ENTERO. El edificio se recentra solo frente a usted al entrar en AR, y de nuevo cada vez que la Quest
+  recalibra su propio espacio (evento WebXR `XRReferenceSpace.reset`).
+- **Panel de capas** y **tarjeta de instrucciones**: Arquitectura / Seguridad y Control / Eléctrico, con la
+  arquitectura atenuándose en blanco (con líneas de borde, para que se note la forma) al elegir una capa
+  técnica. Son geometría 3D de verdad (planos con textura de canvas), no HTML: el `dom-overlay` del
+  navegador de la Quest no traducía el rayo del control en clicks sobre botones HTML. Quedan **fijos en el
+  cuarto** (no siguen la cabeza) — se colocan frente a usted una sola vez al entrar, y se pueden agarrar del
+  fondo oscuro/la tarjeta y arrastrar a otro lugar con el rayo+gatillo, igual que un piso. (Control de
+  Iluminación y Agente Limpio se excluyeron del export: no aportaban nada visible o no se necesitaban para
+  esta versión.)
 
 ## Arquitectura: código en git, modelo en Vercel Blob
 

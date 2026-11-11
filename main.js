@@ -60,7 +60,12 @@ en la misma sesion de pruebas en vivo, a pedido del usuario.
   7) "lo del grip no funciona, quitalo": el squeeze (boton de agarre) no disparaba de forma confiable en el
      visor real -- se quito ese gatillo manual (y la fila correspondiente en las instrucciones). El
      recentrado automatico (al entrar y cuando la Quest recalibra su espacio, XRReferenceSpace "reset")
-     sigue igual, no dependia del grip. */
+     sigue igual, no dependia del grip.
+  8) "la ui no deberia moverse con mi cabeza, deberia estar estatica como la ui de meta que puedo mover el
+     panel": panelGroup/instructionsGroup colgaban de la CAMARA (HUD: siguen la cabeza) -- ahora cuelgan de
+     `scene` (fijos en el mundo) y se colocan frente a la camara UNA sola vez (placeUIInFrontOfCamera, al
+     entrar en AR). Se agrego ademas una manija/fondo en cada panel (dragHandles) para poder agarrarlo y
+     arrastrarlo despues, igual gatillo que separar un piso (ver grabbedUI). */
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { ARButton } from "three/addons/webxr/ARButton.js";
@@ -91,6 +96,8 @@ renderer.xr.addEventListener("sessionstart", () => {
   pendingRecenter = true; // 2026-11-11: "el modelo queda super lejos, no lo puedo atraer" -- el origen de la
   // sesion XR no necesariamente cae donde esta parado el usuario; se reubica el modelo frente a la camara en
   // vez de confiar en las coordenadas absolutas que trae el .glb (ver recenterModel()/pendingRecenter abajo).
+  if (!uiPlaced) pendingPlaceUI = true; // los paneles de UI se colocan frente a la camara UNA sola vez (si el
+  // usuario ya los arrastro a otro lado, un recentrado de sistema despues no se los debe pisar)
   refSpaceListenerAttached = false; // hay que re-engancharlo cada sesion nueva (ver animation loop)
 });
 renderer.xr.addEventListener("sessionend", () => {
@@ -185,12 +192,16 @@ function buildPanel() {
 }
 
 // ----- panel 3D (el que de verdad se usa adentro del visor -- ver punto 5 arriba): un plano con textura de
-// <canvas> por boton, colgando de la camara.
+// <canvas> por boton. 2026-11-11: "la ui no deberia moverse con mi cabeza, deberia estar estatica como la ui
+// de meta que puedo mover el panel" -- antes colgaba de la CAMARA (se movia con la cabeza, como un HUD);
+// ahora cuelga de `scene` (fijo en el mundo, como un objeto real) y se coloca UNA sola vez frente a la camara
+// (ver placeUIInFrontOfCamera()/pendingPlaceUI mas abajo) -- despues de eso se queda quieto aunque uno gire
+// la cabeza, y se puede agarrar/arrastrar como cualquier otro objeto (ver dragHandles/raycastDragHandle).
 const panelGroup = new THREE.Group();
-panelGroup.position.set(0, -0.28, -0.85); // un poco abajo y adelante: se ve con solo bajar la mirada, no tapa el edificio
-camera.add(panelGroup);
+scene.add(panelGroup);
 const panelButtons = []; // {mesh, label, rgb, layerIdx, canvasW}
 const uiButtons = []; // {mesh, onClick} -- TODO objeto 3D tocable (botones del panel + cerrar instrucciones)
+const dragHandles = []; // {mesh, group} -- agarrar aca arrastra TODO el grupo (panelGroup o instructionsGroup)
 const BTN_H = 0.052,
   BTN_GAP = 0.012;
 const BTN_FONT = "600 38px system-ui, sans-serif";
@@ -274,6 +285,17 @@ function build3DPanel() {
     panelButtons.push({ mesh, label: it.label, rgb: it.rgb, layerIdx: it.layerIdx, canvasW: it.canvasW });
     uiButtons.push({ mesh, onClick: () => selectLayer(it.layerIdx === -1 ? null : it.layerIdx) });
   });
+  // fondo/manija: un panel oscuro detras de los botones (se agrega DESPUES de ellos para que los botones se
+  // dibujen encima, aunque todos usen depthTest:false) -- ademas de verse mas "panel" que botones sueltos
+  // flotando, es el area para agarrar y arrastrar TODO el panel (ver dragHandles).
+  const bg = new THREE.Mesh(
+    new THREE.PlaneGeometry(totalW + 0.03, BTN_H + 0.03),
+    new THREE.MeshBasicMaterial({ color: 0x14141a, transparent: true, opacity: 0.55, depthTest: false })
+  );
+  bg.position.z = -0.001;
+  bg.renderOrder = -1; // se dibuja ANTES que los botones sin importar el orden en que se agregaron (todos usan depthTest:false)
+  panelGroup.add(bg);
+  dragHandles.push({ mesh: bg, group: panelGroup });
 }
 
 function refreshPanelVisual() {
@@ -299,6 +321,20 @@ function raycastUI(index) {
   return uiButtons.find((b) => b.mesh === hit.object).onClick;
 }
 
+function raycastDragHandle(index) {
+  // mismo patron que raycastUI, contra los fondos/manijas de los paneles (ver dragHandles) -- agarrar ahi
+  // arrastra TODO el grupo (panelGroup o instructionsGroup), no un boton individual.
+  tmpMatrix.identity().extractRotation(controllers[index].matrixWorld);
+  raycaster.ray.origin.setFromMatrixPosition(controllers[index].matrixWorld);
+  raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tmpMatrix);
+  const hit = raycaster.intersectObjects(
+    dragHandles.filter((d) => d.mesh.parent && d.mesh.parent.visible !== false).map((d) => d.mesh),
+    false
+  )[0];
+  if (!hit) return null;
+  return dragHandles.find((d) => d.mesh === hit.object).group;
+}
+
 // ----- panel de instrucciones (2026-11-11: "las instrucciones no deberian salir planas, deberian salir en
 // la realidad virtual, a un lado como ventana flotante... con imagen de los controles y que hace... y luego
 // poder darle cerrar instrucciones un boton") -- antes era el cartel de texto plano #hint (dom-overlay);
@@ -306,8 +342,7 @@ function raycastUI(index) {
 // con un icono + texto por gesto, y un boton "Cerrar instrucciones" de verdad (geometria 3D tocable con el
 // mismo rayo/gatillo, igual criterio que el panel de capas: el dom-overlay HTML no respondia al rayo).
 const instructionsGroup = new THREE.Group();
-instructionsGroup.position.set(-0.52, 0.08, -0.85); // a un lado (izquierda), mas o menos a la altura de los ojos
-camera.add(instructionsGroup);
+scene.add(instructionsGroup); // fijo en el mundo (ver nota junto a panelGroup) -- se coloca una vez, ver placeUIInFrontOfCamera()
 
 // 2026-11-11: "quita esos emojis de las instrucciones se ve horrible" -- los emojis se renderizan distinto
 // (y mal) segun la plataforma/fuente; se cambia por un numero simple dentro del circulo, mismo acento de
@@ -316,6 +351,7 @@ const INSTRUCTIONS = [
   { text: "Apunte con el rayo a un piso y apriete el gatillo para separarlo." },
   { text: "Los dos gatillos a la vez: mueva, gire y agrande/achique todo el edificio." },
   { text: "Baje la mirada: ahí está el panel para elegir una capa técnica." },
+  { text: "Los paneles quedan fijos en el cuarto: agárrelos del fondo oscuro para moverlos de lugar." },
 ];
 
 function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
@@ -386,6 +422,7 @@ function buildInstructionsPanel() {
     new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false })
   );
   instructionsGroup.add(card);
+  dragHandles.push({ mesh: card, group: instructionsGroup }); // agarrar la tarjeta misma arrastra todo el grupo
 
   const closeLabel = "Cerrar instrucciones";
   const closeCanvasW = canvasWidthFor(closeLabel);
@@ -483,6 +520,7 @@ controllers.forEach((c, i) => {
 });
 
 const grabbed = {}; // indice de input (0|1) -> {name, offset: Vector3 (mundo)}
+const grabbedUI = {}; // indice de input (0|1) -> {group, offset: Vector3 (mundo)} -- arrastrar un panel (ver dragHandles)
 const raycaster = new THREE.Raycaster();
 const tmpMatrix = new THREE.Matrix4();
 
@@ -521,11 +559,19 @@ function startTwoHand() {
 }
 
 function onSelectStart(index) {
-  const uiHit = raycastUI(index); // primero la UI (panel de capas, cerrar instrucciones): si se toco un
+  const uiHit = raycastUI(index); // primero los BOTONES (panel de capas, cerrar instrucciones): un click
   if (uiHit) {
-    // boton, no cuenta como agarre de piso ni como gatillo "sostenido" (ver mas abajo)
+    // inmediato, no cuenta como agarre de piso ni como gatillo "sostenido" (ver mas abajo)
     uiHit();
-    return; // ojo: NO se marca triggerDown[index]=true -- tocar la UI no debe disparar el gesto de dos manos
+    return; // ojo: NO se marca triggerDown[index]=true -- tocar un boton no debe disparar el gesto de dos manos
+  }
+  const dragGroup = raycastDragHandle(index); // despues las MANIJAS (fondo del panel / tarjeta de
+  if (dragGroup) {
+    // instrucciones): arrastrar todo el grupo, gatillo "sostenido" como agarrar un piso (ver grabbedUI abajo)
+    triggerDown[index] = true;
+    const pos = inputPosition(index);
+    grabbedUI[index] = { group: dragGroup, offset: dragGroup.position.clone().sub(pos) };
+    return;
   }
   triggerDown[index] = true;
   if (triggerDown[0] && triggerDown[1]) {
@@ -546,6 +592,10 @@ function onSelectStart(index) {
 
 function onSelectEnd(index) {
   triggerDown[index] = false;
+  if (grabbedUI[index]) {
+    delete grabbedUI[index];
+    return;
+  }
   if (twoHand) {
     if (!(triggerDown[0] && triggerDown[1])) twoHand = null; // se solto una mano: termina el gesto de dos manos
     return;
@@ -583,6 +633,26 @@ function recenterModel() {
   root.position.set(camPos.x + camDir.x * RECENTER_DISTANCE_M, 0, camPos.z + camDir.z * RECENTER_DISTANCE_M);
 }
 
+let pendingPlaceUI = false;
+let uiPlaced = false;
+
+function placeUIInFrontOfCamera() {
+  // coloca panelGroup/instructionsGroup en el mundo, una sola vez, en la misma posicion/orientacion relativa
+  // a la camara que tenian cuando colgaban de ella (ver nota junto a panelGroup) -- asi el "primer vistazo"
+  // se siente igual que antes, pero a partir de aca quedan fijos en el mundo (no siguen la cabeza).
+  const camPos = new THREE.Vector3();
+  const camQuat = new THREE.Quaternion();
+  camera.getWorldPosition(camPos);
+  camera.getWorldQuaternion(camQuat);
+  const place = (group, localOffset) => {
+    group.position.copy(localOffset).applyQuaternion(camQuat).add(camPos);
+    group.quaternion.copy(camQuat);
+  };
+  place(panelGroup, new THREE.Vector3(0, -0.28, -0.85));
+  place(instructionsGroup, new THREE.Vector3(-0.52, 0.08, -0.85));
+  uiPlaced = true;
+}
+
 window.addEventListener("resize", () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
@@ -602,6 +672,15 @@ renderer.setAnimationLoop(() => {
   if (pendingRecenter) {
     recenterModel();
     pendingRecenter = false;
+  }
+  if (pendingPlaceUI) {
+    placeUIInFrontOfCamera();
+    pendingPlaceUI = false;
+  }
+  for (const idx in grabbedUI) {
+    const g = grabbedUI[idx];
+    const pos = inputPosition(Number(idx));
+    g.group.position.copy(pos.clone().add(g.offset)); // los paneles cuelgan de `scene` directo: posicion de mundo = posicion local
   }
   if (twoHand) {
     const p0 = inputPosition(0),
