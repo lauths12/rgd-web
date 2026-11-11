@@ -56,7 +56,11 @@ en la misma sesion de pruebas en vivo, a pedido del usuario.
   6) "las instrucciones no deberian salir planas... ventana flotante... con imagen de los controles y que
      hace... cerrar instrucciones un boton": el cartel de texto plano (#hint, dom-overlay) se reemplaza por
      una tarjeta 3D a un lado (ver instructionsGroup/buildInstructionsPanel), con un icono + texto por gesto
-     y un boton "Cerrar instrucciones" de geometria 3D de verdad (mismo raycastUI de arriba, no HTML). */
+     y un boton "Cerrar instrucciones" de geometria 3D de verdad (mismo raycastUI de arriba, no HTML).
+  7) "lo del grip no funciona, quitalo": el squeeze (boton de agarre) no disparaba de forma confiable en el
+     visor real -- se quito ese gatillo manual (y la fila correspondiente en las instrucciones). El
+     recentrado automatico (al entrar y cuando la Quest recalibra su espacio, XRReferenceSpace "reset")
+     sigue igual, no dependia del grip. */
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { ARButton } from "three/addons/webxr/ARButton.js";
@@ -305,7 +309,6 @@ camera.add(instructionsGroup);
 const INSTRUCTIONS = [
   { icon: "🎯", text: "Apunte con el rayo a un piso y apriete el gatillo para separarlo." },
   { icon: "🤝", text: "Los dos gatillos a la vez: mueva, gire y agrande/achique todo el edificio." },
-  { icon: "✊", text: "Agarre (grip) de cualquier control: trae el edificio de nuevo frente a usted." },
   { icon: "👇", text: "Baje la mirada: ahí está el panel para elegir una capa técnica." },
 ];
 
@@ -548,9 +551,9 @@ function onSelectEnd(index) {
 controllers.forEach((c, i) => {
   c.addEventListener("selectstart", () => onSelectStart(i));
   c.addEventListener("selectend", () => onSelectEnd(i));
-  c.addEventListener("squeezestart", () => {
-    pendingRecenter = true; // boton de agarre (grip) de cualquiera de los dos controles: traer el edificio
-  }); // de nuevo frente a uno, por si quedo lejos o uno se movio de lugar
+  // 2026-11-11: "lo del grip no funciona, quitalo" -- el squeeze no disparaba de forma confiable en el
+  // visor real. El recentrado automatico (al entrar y cuando la Quest recalibra, ver XRReferenceSpace
+  // "reset" mas abajo) sigue andando igual; solo se quito este gatillo manual por boton de agarre.
 });
 
 let pendingRecenter = false;
