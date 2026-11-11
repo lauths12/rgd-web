@@ -309,10 +309,13 @@ const instructionsGroup = new THREE.Group();
 instructionsGroup.position.set(-0.52, 0.08, -0.85); // a un lado (izquierda), mas o menos a la altura de los ojos
 camera.add(instructionsGroup);
 
+// 2026-11-11: "quita esos emojis de las instrucciones se ve horrible" -- los emojis se renderizan distinto
+// (y mal) segun la plataforma/fuente; se cambia por un numero simple dentro del circulo, mismo acento de
+// color que el resto de la app (el celeste del rayo del control, 0x44ddff).
 const INSTRUCTIONS = [
-  { icon: "🎯", text: "Apunte con el rayo a un piso y apriete el gatillo para separarlo." },
-  { icon: "🤝", text: "Los dos gatillos a la vez: mueva, gire y agrande/achique todo el edificio." },
-  { icon: "👇", text: "Baje la mirada: ahí está el panel para elegir una capa técnica." },
+  { text: "Apunte con el rayo a un piso y apriete el gatillo para separarlo." },
+  { text: "Los dos gatillos a la vez: mueva, gire y agrande/achique todo el edificio." },
+  { text: "Baje la mirada: ahí está el panel para elegir una capa técnica." },
 ];
 
 function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
@@ -357,11 +360,15 @@ function buildInstructionsCardTexture() {
     const cy = titleH + i * rowH + rowH / 2;
     ctx.beginPath();
     ctx.arc(54, cy, 34, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.fillStyle = "rgba(68,221,255,0.16)";
     ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "rgba(68,221,255,0.7)";
+    ctx.stroke();
     ctx.textAlign = "center";
-    ctx.font = "34px system-ui, sans-serif";
-    ctx.fillText(row.icon, 54, cy + 2);
+    ctx.font = "700 30px system-ui, sans-serif";
+    ctx.fillStyle = "rgba(68,221,255,0.95)";
+    ctx.fillText(String(i + 1), 54, cy + 2);
     ctx.textAlign = "left";
     ctx.font = "400 25px system-ui, sans-serif";
     ctx.fillStyle = "rgba(255,255,255,0.92)";
