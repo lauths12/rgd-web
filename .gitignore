@@ -4,3 +4,6 @@
 rgd.glb
 .vercel
 .env*
+# terreno/vias de Bogota: se probaron y se sacaron del visor ("mejor sin terreno") -- el archivo se deja
+# generado en disco por si se reconsidera, pero ya no se commitea ni se carga.
+terrain.glb
