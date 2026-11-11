@@ -83,10 +83,19 @@ renderer.xr.addEventListener("sessionstart", () => {
   pendingRecenter = true; // 2026-11-11: "el modelo queda super lejos, no lo puedo atraer" -- el origen de la
   // sesion XR no necesariamente cae donde esta parado el usuario; se reubica el modelo frente a la camara en
   // vez de confiar en las coordenadas absolutas que trae el .glb (ver recenterModel()/pendingRecenter abajo).
+  refSpaceListenerAttached = false; // hay que re-engancharlo cada sesion nueva (ver animation loop)
 });
 renderer.xr.addEventListener("sessionend", () => {
   scene.background = new THREE.Color(0x15161a); // vuelve al fondo solido para la vista previa de escritorio
 });
+
+// 2026-11-11: "si sale lejos porque mi posicion esta mal calibrada, al calibrar deberia salir en frente" --
+// WebXR SI tiene un evento estandar para esto: XRReferenceSpace "reset", que dispara cuando el sistema
+// recentra el origen de un salto (la Quest tiene su propio recentrado/calibracion de sistema, fuera de
+// nuestra app). Engancharlo hace que recenterModel() se dispare solo cada vez que la persona recalibra con
+// el sistema, no solo con el grip de nuestro control. getReferenceSpace() no esta listo en el mismo cuadro
+// de "sessionstart" (Three.js lo pide de forma asincrona), por eso se reintenta en el loop hasta que exista.
+let refSpaceListenerAttached = false;
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0x404048, 1.3));
 const sun = new THREE.DirectionalLight(0xffffff, 1.4);
@@ -456,6 +465,15 @@ window.addEventListener("resize", () => {
 });
 
 renderer.setAnimationLoop(() => {
+  if (!refSpaceListenerAttached && renderer.xr.isPresenting) {
+    const refSpace = renderer.xr.getReferenceSpace();
+    if (refSpace) {
+      refSpace.addEventListener("reset", () => {
+        pendingRecenter = true; // la Quest recentro/recalibro el espacio: volver a poner el edificio en frente
+      });
+      refSpaceListenerAttached = true;
+    }
+  }
   if (pendingRecenter) {
     recenterModel();
     pendingRecenter = false;
