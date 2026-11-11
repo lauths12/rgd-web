@@ -467,6 +467,26 @@ new GLTFLoader().load(
   }
 );
 
+// 2026-11-11: "haz el relieve y hazlo verde... creo que existe mapas de bogota... que se vea bonito tipo
+// carretera y asi" -- terrain.glb es relieve real (curvas de nivel) + vias reales alrededor de Bloque RGD,
+// de datos abiertos de Bogota (ver export_terrain_gltf.py para como se armo; NO es confidencial, por eso SI
+// esta en git, a diferencia de rgd.glb). Cuelga de `root` igual que el edificio (se mueve/escala/gira junto
+// con el gesto de dos controles). Sin rotacion confirmada todavia -- ver THETA_DEG en export_terrain_gltf.py.
+new GLTFLoader().load(
+  "terrain.glb",
+  (gltf) => {
+    gltf.scene.traverse((obj) => {
+      if (obj.isMesh) {
+        const old = obj.material;
+        obj.material = new THREE.MeshBasicMaterial({ color: old.color, transparent: old.transparent, opacity: old.opacity });
+      }
+    });
+    root.add(gltf.scene);
+  },
+  undefined,
+  (err) => console.warn("No se pudo cargar terrain.glb:", err.message)
+);
+
 const controllerModelFactory = new XRControllerModelFactory();
 const controllers = [renderer.xr.getController(0), renderer.xr.getController(1)];
 const controllerGrips = [renderer.xr.getControllerGrip(0), renderer.xr.getControllerGrip(1)];
