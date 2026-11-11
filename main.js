@@ -113,21 +113,27 @@ scene.add(sun);
 const root = new THREE.Group(); // en v1 queda fijo en el origen; si mas adelante se quiere mover/girar todo
 scene.add(root); // el edificio (como el gesto de dos manos de la maqueta en Isaac Sim), se mueve este grupo.
 
-// 2026-11-11: "ponle suelo o terreno... partes del edificio estan bajo tierra" -- la altura del "suelo" NO
-// se invento: se tomo del propio modelo BIM, el piso "NT" (Nivel de Terreno, Piso02_NT) que el arquitecto ya
-// marco como el nivel del terreno real (consultado en RGD_scene.usda: tope de NT en Z=0.978, igual espacio
-// "metros finales/maqueta" que todo el resto de este archivo). Es un plano PLANO (no el relieve real con
-// pendiente del lote -- Los Andes esta en una ladera, se consulto una API de elevacion y hay ~18 m de
-// diferencia a solo 55 m de distancia, pero no hay en el modelo ningun dato de orientacion real (norte) para
-// saber de que lado cae la pendiente dentro de los ejes del modelo -- sin eso, inventar la inclinacion
-// podria quedar al revez). Centrado en el mismo footprint que /root/Pisos (ver export_rgd_gltf.py).
+// 2026-11-11: "ponle suelo o terreno... partes del edificio estan bajo tierra" -- la altura de referencia
+// (centro del disco) sale del propio modelo BIM, el piso "NT" (Nivel de Terreno, Piso02_NT) que el
+// arquitecto ya marco como el nivel del terreno real (RGD_scene.usda: tope de NT en Z=0.978, mismo espacio
+// "metros finales/maqueta" de todo este archivo). "nah pero haz el relieve y hazlo verde, prueba diferentes
+// angulos y yo te digo si esta mal o bien": Los Andes esta en una ladera real (API de elevacion: ~18 m de
+// diferencia a 55 m de distancia), pero el modelo no trae dato de orientacion (norte) para saber de que lado
+// cae la pendiente dentro de los ejes del modelo -- SLOPE_AXIS/SLOPE_DEG/SLOPE_SIGN quedan como primera
+// prueba a ojo (ver comentario junto a cada uno); si el usuario dice que el lado alto/bajo esta al revez o
+// en el otro eje, se ajustan esos 3 valores nomas.
 const GROUND_Y = 0.978;
-const ground = new THREE.Mesh(
-  new THREE.CircleGeometry(2.2, 48),
-  new THREE.MeshBasicMaterial({ color: 0x9c8b73 })
-);
-ground.rotation.x = -Math.PI / 2; // el circulo nace parado en XY; acostarlo para que quede horizontal (normal hacia +Y)
+const SLOPE_DEG = 14; // primera prueba: pendiente real es ~18 m / 55 m (~18 grados) pero eso es a escala de
+// terreno real, no del circulo chico de alrededor del edificio -- se probo un poco mas suave
+const SLOPE_AXIS = "z"; // eje alrededor del cual se inclina ("x" sube/baja en Z: norte-sur-ish; "z" sube/baja en X: este-oeste-ish)
+const SLOPE_SIGN = 1; // 1 o -1: de que lado queda el lado ALTO -- se invierte si el usuario dice que esta al revez
+
+const groundGeo = new THREE.CircleGeometry(2.6, 48);
+groundGeo.rotateX(-Math.PI / 2); // el circulo nace parado en XY; acostarlo para que quede horizontal (normal hacia +Y) -- se
+// hace sobre la GEOMETRIA (no sobre la rotacion del mesh) para que la inclinacion de abajo sea un giro limpio en un solo eje
+const ground = new THREE.Mesh(groundGeo, new THREE.MeshBasicMaterial({ color: 0x4a7c3a }));
 ground.position.set(0, GROUND_Y, -1.4); // centro del footprint de /root/Pisos, en el mismo espacio local que root
+ground.rotation[SLOPE_AXIS] = SLOPE_SIGN * THREE.MathUtils.degToRad(SLOPE_DEG); // el relieve: inclina el disco entero
 root.add(ground);
 
 const floors = {}; // nombre de piso -> {node, ghost}
