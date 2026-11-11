@@ -51,8 +51,12 @@ en la misma sesion de pruebas en vivo, a pedido del usuario.
      CAMARA (panelGroup = camera.add(...), por eso `scene.add(camera)` mas abajo: para que Three.js renderice
      los hijos de la camara hace falta que la camara misma sea parte de la escena) -- asi el panel siempre
      queda a tiro, debajo del centro de la vista, sin tener que recentrarlo por separado. Se seleccionan con
-     el MISMO rayo/raycaster que ya se usa para los pisos (ver raycastPanel), asi que usa el gatillo del
-     control -- la misma entrada que ya se sabe que funciona en este visor. */
+     el MISMO rayo/raycaster que ya se usa para los pisos (ver raycastUI), asi que usa el gatillo del
+     control -- la misma entrada que ya se sabe que funciona en este visor.
+  6) "las instrucciones no deberian salir planas... ventana flotante... con imagen de los controles y que
+     hace... cerrar instrucciones un boton": el cartel de texto plano (#hint, dom-overlay) se reemplaza por
+     una tarjeta 3D a un lado (ver instructionsGroup/buildInstructionsPanel), con un icono + texto por gesto
+     y un boton "Cerrar instrucciones" de geometria 3D de verdad (mismo raycastUI de arriba, no HTML). */
 import * as THREE from "three";
 import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { ARButton } from "three/addons/webxr/ARButton.js";
@@ -179,6 +183,7 @@ const panelGroup = new THREE.Group();
 panelGroup.position.set(0, -0.28, -0.85); // un poco abajo y adelante: se ve con solo bajar la mirada, no tapa el edificio
 camera.add(panelGroup);
 const panelButtons = []; // {mesh, label, rgb, layerIdx, canvasW}
+const uiButtons = []; // {mesh, onClick} -- TODO objeto 3D tocable (botones del panel + cerrar instrucciones)
 const BTN_H = 0.052,
   BTN_GAP = 0.012;
 const BTN_FONT = "600 38px system-ui, sans-serif";
@@ -260,6 +265,7 @@ function build3DPanel() {
     x += meshW + BTN_GAP;
     panelGroup.add(mesh);
     panelButtons.push({ mesh, label: it.label, rgb: it.rgb, layerIdx: it.layerIdx, canvasW: it.canvasW });
+    uiButtons.push({ mesh, onClick: () => selectLayer(it.layerIdx === -1 ? null : it.layerIdx) });
   });
 }
 
@@ -272,14 +278,118 @@ function refreshPanelVisual() {
   });
 }
 
-function raycastPanel(index) {
+function raycastUI(index) {
+  // mismo raycaster que raycastFloor, contra CUALQUIER boton 3D tocable (capas + cerrar instrucciones) --
+  // uiButtons se va llenando a medida que se construyen (build3DPanel, buildInstructionsPanel).
   tmpMatrix.identity().extractRotation(controllers[index].matrixWorld);
   raycaster.ray.origin.setFromMatrixPosition(controllers[index].matrixWorld);
   raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tmpMatrix);
-  const hit = raycaster.intersectObjects(panelButtons.map((p) => p.mesh), false)[0];
+  const hit = raycaster.intersectObjects(
+    uiButtons.filter((b) => b.mesh.parent && b.mesh.parent.visible !== false).map((b) => b.mesh),
+    false
+  )[0];
   if (!hit) return null;
-  return panelButtons.find((p) => p.mesh === hit.object).layerIdx;
+  return uiButtons.find((b) => b.mesh === hit.object).onClick;
 }
+
+// ----- panel de instrucciones (2026-11-11: "las instrucciones no deberian salir planas, deberian salir en
+// la realidad virtual, a un lado como ventana flotante... con imagen de los controles y que hace... y luego
+// poder darle cerrar instrucciones un boton") -- antes era el cartel de texto plano #hint (dom-overlay);
+// ahora es una tarjeta 3D a un lado (no tapa el edificio ni se superpone al panel de capas, que esta abajo),
+// con un icono + texto por gesto, y un boton "Cerrar instrucciones" de verdad (geometria 3D tocable con el
+// mismo rayo/gatillo, igual criterio que el panel de capas: el dom-overlay HTML no respondia al rayo).
+const instructionsGroup = new THREE.Group();
+instructionsGroup.position.set(-0.52, 0.08, -0.85); // a un lado (izquierda), mas o menos a la altura de los ojos
+camera.add(instructionsGroup);
+
+const INSTRUCTIONS = [
+  { icon: "🎯", text: "Apunte con el rayo a un piso y apriete el gatillo para separarlo." },
+  { icon: "🤝", text: "Los dos gatillos a la vez: mueva, gire y agrande/achique todo el edificio." },
+  { icon: "✊", text: "Agarre (grip) de cualquier control: trae el edificio de nuevo frente a usted." },
+  { icon: "👇", text: "Baje la mirada: ahí está el panel para elegir una capa técnica." },
+];
+
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(" ");
+  let line = "";
+  const lines = [];
+  for (const word of words) {
+    const test = line ? line + " " + word : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  }
+  if (line) lines.push(line);
+  lines.forEach((l, i) => ctx.fillText(l, x, y + i * lineHeight));
+}
+
+function buildInstructionsCardTexture() {
+  const W = 480,
+    rowH = 128,
+    titleH = 70,
+    padBottom = 20;
+  const H = titleH + INSTRUCTIONS.length * rowH + padBottom;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  roundRectPath(ctx, 3, 3, W - 6, H - 6, 28);
+  ctx.fillStyle = "rgba(18,18,24,0.88)";
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "rgba(255,255,255,0.12)";
+  ctx.stroke();
+  ctx.textBaseline = "middle";
+  ctx.textAlign = "left";
+  ctx.font = "700 32px system-ui, sans-serif";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText("Cómo usar", 28, titleH / 2 + 4);
+  INSTRUCTIONS.forEach((row, i) => {
+    const cy = titleH + i * rowH + rowH / 2;
+    ctx.beginPath();
+    ctx.arc(54, cy, 34, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.fill();
+    ctx.textAlign = "center";
+    ctx.font = "34px system-ui, sans-serif";
+    ctx.fillText(row.icon, 54, cy + 2);
+    ctx.textAlign = "left";
+    ctx.font = "400 25px system-ui, sans-serif";
+    ctx.fillStyle = "rgba(255,255,255,0.92)";
+    wrapText(ctx, row.text, 106, cy - 18, W - 106 - 24, 30);
+  });
+  return new THREE.CanvasTexture(canvas);
+}
+
+function buildInstructionsPanel() {
+  const tex = buildInstructionsCardTexture();
+  const cardW = tex.image.width / PX_PER_M,
+    cardH = tex.image.height / PX_PER_M;
+  const card = new THREE.Mesh(
+    new THREE.PlaneGeometry(cardW, cardH),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthTest: false })
+  );
+  instructionsGroup.add(card);
+
+  const closeLabel = "Cerrar instrucciones";
+  const closeCanvasW = canvasWidthFor(closeLabel);
+  const closeMeshW = closeCanvasW / PX_PER_M;
+  const closeBtn = new THREE.Mesh(
+    new THREE.PlaneGeometry(closeMeshW, BTN_H),
+    new THREE.MeshBasicMaterial({
+      map: makeButtonTexture(closeLabel, [170, 60, 60], false, closeCanvasW),
+      transparent: true,
+      depthTest: false,
+    })
+  );
+  closeBtn.position.y = -(cardH / 2 + 0.025 + BTN_H / 2);
+  instructionsGroup.add(closeBtn);
+  uiButtons.push({ mesh: closeBtn, onClick: () => (instructionsGroup.visible = false) });
+}
+buildInstructionsPanel(); // no depende del modelo (rgd.glb), se puede armar de una
 
 // 2026-11-11: "no hay forma que se corra automaticamente desde github al commitear?" -- rgd.glb (geometria
 // confidencial) nunca puede estar en git, asi que un deploy disparado por git (push) nunca lo tendria si se
@@ -334,11 +444,9 @@ new GLTFLoader().load(
     });
     build3DPanel(); // el panel real (adentro del visor); buildPanel() de abajo es solo para probarlo con mouse
     buildPanel();
-    document.getElementById("hint").textContent =
-      `RGD — maqueta (${Object.keys(floors).length} pisos) · apunte con el rayo a un piso y apriete el ` +
-      "gatillo para separarlo (suelte cerca del fantasma gris para que encaje) · los dos gatillos a la vez: " +
-      "mover/girar/agrandar el edificio entero · agarre (grip): traerlo de nuevo frente a usted · baje la " +
-      "mirada para ver el panel de capas, apúntelo con el rayo y apriete el gatillo para elegir una.";
+    // las instrucciones ya se ven en la tarjeta 3D (instructionsGroup); el cartel plano queda solo como
+    // confirmacion chica de que el modelo cargo bien (o el error, ver el catch de abajo).
+    document.getElementById("hint").textContent = `RGD — maqueta cargada (${Object.keys(floors).length} pisos).`;
   },
   undefined,
   (err) => {
@@ -397,10 +505,11 @@ function startTwoHand() {
 }
 
 function onSelectStart(index) {
-  const panelHit = raycastPanel(index); // primero el panel: si se toco un boton, no cuenta como agarre de piso
-  if (panelHit !== null) {
-    selectLayer(panelHit === -1 ? null : panelHit);
-    return; // ojo: NO se marca triggerDown[index]=true -- tocar el panel no debe disparar el gesto de dos manos
+  const uiHit = raycastUI(index); // primero la UI (panel de capas, cerrar instrucciones): si se toco un
+  if (uiHit) {
+    // boton, no cuenta como agarre de piso ni como gatillo "sostenido" (ver mas abajo)
+    uiHit();
+    return; // ojo: NO se marca triggerDown[index]=true -- tocar la UI no debe disparar el gesto de dos manos
   }
   triggerDown[index] = true;
   if (triggerDown[0] && triggerDown[1]) {
