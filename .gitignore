@@ -1,0 +1,5 @@
+# rgd.glb: geometria real del edificio (confidencial), exportada con export_rgd_gltf.py desde
+# /srv/isaac-shared/RGD/RGD_scene.usda -- nunca se commitea, se regenera localmente con ese script
+# y se sube a Vercel con el CLI (incluye archivos locales aunque no esten en git).
+rgd.glb
+.vercel

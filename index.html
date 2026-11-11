@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>RGD — maqueta</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #15161a; overflow: hidden; }
+  canvas { display: block; }
+  #hint {
+    position: fixed; left: 50%; top: 16px; transform: translateX(-50%);
+    color: #e8e8ee; font: 14px/1.4 system-ui, sans-serif; text-align: center;
+    background: rgba(0,0,0,.45); padding: 8px 14px; border-radius: 10px; max-width: 90vw;
+  }
+  #panelWrap {
+    position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 94vw;
+  }
+  #panelLabel {
+    font: 600 11px/1 system-ui, sans-serif; letter-spacing: .14em; color: rgba(255,255,255,.4);
+    text-transform: uppercase;
+  }
+  #panel {
+    display: flex; gap: 6px; padding: 8px; border-radius: 22px;
+    background: rgba(16,16,20,.72); backdrop-filter: blur(16px) saturate(150%);
+    border: 1px solid rgba(255,255,255,.09);
+    box-shadow: 0 10px 34px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.05);
+    flex-wrap: wrap; justify-content: center;
+  }
+  #panel button {
+    display: flex; align-items: center; gap: 9px; font: 600 13px/1 system-ui, sans-serif;
+    color: rgba(255,255,255,.65); border: 1px solid transparent; background: rgba(255,255,255,.045);
+    cursor: pointer; padding: 11px 18px 11px 13px; border-radius: 999px; white-space: nowrap;
+    transition: background .18s, border-color .18s, color .18s, box-shadow .18s;
+  }
+  #panel button .dot {
+    width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0;
+    background: rgb(var(--r), var(--g), var(--b));
+    box-shadow: 0 0 7px rgba(var(--r), var(--g), var(--b), .9);
+  }
+  #panel button.active {
+    color: #fff; border-color: rgba(var(--r), var(--g), var(--b), .9);
+    background: rgba(var(--r), var(--g), var(--b), .22);
+    box-shadow: 0 0 18px rgba(var(--r), var(--g), var(--b), .45);
+  }
+</style>
+</head>
+<body>
+  <div id="hint">RGD — maqueta · apunte con el rayo a un piso y apriete el gatillo para separarlo · los
+    dos gatillos a la vez: mover/girar/agrandar el edificio entero · agarre (grip): traerlo frente a usted.</div>
+  <div id="panelWrap"><div id="panelLabel">Capas</div><div id="panel"></div></div>
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="main.js"></script>
+</body>
+</html>
